@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "author": "Smart Home Monitor",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht1", "top": 100, "left": 350, "attrs": { "pin": "4" } }
+  ],
+  "connections": [
+    [ "dht1:VCC", "esp:3V3", "red", [] ],
+    [ "dht1:SDA", "esp:4", "green", [] ],
+    [ "dht1:GND", "esp:GND.1", "black", [] ]
+  ],
+  "dependencies": {}
+}

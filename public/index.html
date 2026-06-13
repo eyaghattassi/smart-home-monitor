@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Home Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: sans-serif; background:#0f0f1a; color:white; }
+
+    #header {
+      background:#1a1a2e;
+      padding:16px 24px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid #2a2a4a;
+    }
+    #header h1 { font-size:18px; font-weight:500; color:#00d4aa; }
+    #status-badge {
+      padding:4px 14px;
+      border-radius:20px;
+      font-size:12px;
+      background:#1e3a2e;
+      color:#00d4aa;
+    }
+
+    .cards {
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      gap:16px;
+      padding:24px;
+    }
+    .card {
+      background:#1a1a2e;
+      border-radius:16px;
+      padding:24px;
+      text-align:center;
+      border:1px solid #2a2a4a;
+    }
+    .card .value {
+      font-size:3rem;
+      font-weight:300;
+      color:#00d4aa;
+      margin:12px 0 4px;
+    }
+    .card .label {
+      font-size:13px;
+      color:#888;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+    }
+    .card .unit { font-size:1.2rem; color:#666; }
+
+    /* relay card */
+    .relay-value { font-size:1.4rem !important; margin:16px 0 !important; }
+    .relay-btn {
+      padding:10px 32px;
+      border-radius:24px;
+      border:none;
+      font-size:15px;
+      font-weight:500;
+      cursor:pointer;
+      transition:all .2s;
+      margin-top:8px;
+    }
+    .relay-btn.on  { background:#00d4aa; color:#0f0f1a; }
+    .relay-btn.off { background:#2a2a4a; color:#888; }
+    .relay-btn:hover { opacity:0.85; transform:scale(1.03); }
+
+    .chart-section {
+      padding:0 24px 24px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+    }
+    .chart-card {
+      background:#1a1a2e;
+      border-radius:16px;
+      padding:20px;
+      border:1px solid #2a2a4a;
+    }
+    .chart-card h3 {
+      font-size:13px;
+      color:#888;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      margin-bottom:14px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🏠 Smart Home Monitor</h1>
+  <div id="status-badge">● awake</div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="label">Temperature</div>
+    <div class="value" id="temp">--<span class="unit">°C</span></div>
+  </div>
+  <div class="card">
+    <div class="label">Humidity</div>
+    <div class="value" id="hum">--<span class="unit">%</span></div>
+  </div>
+  <div class="card">
+    <div class="label">Relay / Device</div>
+    <div class="relay-value value" id="relay-status">OFF</div>
+    <button class="relay-btn off" id="relay-btn" onclick="toggleRelay()">
+      Turn ON
+    </button>
+  </div>
+</div>
+
+<div class="chart-section">
+  <div class="chart-card">
+    <h3>Temperature history</h3>
+    <canvas id="tempChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>Humidity history</h3>
+    <canvas id="humChart"></canvas>
+  </div>
+</div>
+
+<script>
+  // ── charts setup ──────────────────────
+  const chartOptions = (color) => ({
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color:'#555', maxTicksLimit:6 }, grid: { color:'#1f1f3a' } },
+      y: { ticks: { color:'#555' },                  grid: { color:'#1f1f3a' } }
+    },
+    elements: { point: { radius:2 } }
+  });
+
+  const tempChart = new Chart(document.getElementById('tempChart'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{ label:'°C', data:[], borderColor:'#ff6b6b',
+                   backgroundColor:'rgba(255,107,107,0.1)', tension:0.4, fill:true }]
+    },
+    options: chartOptions('#ff6b6b')
+  });
+
+  const humChart = new Chart(document.getElementById('humChart'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{ label:'%', data:[], borderColor:'#00d4aa',
+                   backgroundColor:'rgba(0,212,170,0.1)', tension:0.4, fill:true }]
+    },
+    options: chartOptions('#00d4aa')
+  });
+
+  // ── relay control ─────────────────────
+  let relayOn = false;
+
+  async function toggleRelay() {
+    const newState = relayOn ? 'OFF' : 'ON';
+    await fetch('/api/relay', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: newState })
+    });
+    relayOn = !relayOn;
+    updateRelayUI();
+  }
+
+  function updateRelayUI() {
+    const btn = document.getElementById('relay-btn');
+    const status = document.getElementById('relay-status');
+    if (relayOn) {
+      status.textContent = 'ON';
+      status.style.color = '#00d4aa';
+      btn.textContent = 'Turn OFF';
+      btn.className = 'relay-btn on';
+    } else {
+      status.textContent = 'OFF';
+      status.style.color = '#666';
+      btn.textContent = 'Turn ON';
+      btn.className = 'relay-btn off';
+    }
+  }
+
+  // ── fetch live data ───────────────────
+  async function updateSensor() {
+    const res = await fetch('/api/sensor');
+    const d   = await res.json();
+
+    document.getElementById('temp').innerHTML =
+      d.temperature + '<span class="unit">°C</span>';
+    document.getElementById('hum').innerHTML =
+      d.humidity + '<span class="unit">%</span>';
+    document.getElementById('status-badge').textContent =
+      '● ' + d.status;
+    relayOn = d.relay;
+    updateRelayUI();
+  }
+
+  async function updateCharts() {
+    const res  = await fetch('/api/history');
+    const data = await res.json();
+    if (!data.length) return;
+
+    tempChart.data.labels                 = data.map(d => d.time);
+    tempChart.data.datasets[0].data       = data.map(d => d.temperature);
+    humChart.data.labels                  = data.map(d => d.time);
+    humChart.data.datasets[0].data        = data.map(d => d.humidity);
+
+    tempChart.update();
+    humChart.update();
+  }
+
+  // ── start polling ─────────────────────
+  updateSensor();
+  updateCharts();
+  setInterval(updateSensor,  3000);
+  setInterval(updateCharts,  5000);
+</script>
+</body>
+</html>
